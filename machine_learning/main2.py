@@ -18,7 +18,7 @@ class DriftDetiection():
 
     def __init__(self):
         self.min_standard_deviation = 1
-        self.min_error_rate = 1
+        self.min_error_probability = 1
         self.current_min = 1
         self.levels = ['normal', 'warning', 'drift']
 
@@ -35,46 +35,46 @@ class DriftDetiection():
         # Binomial Distribution
         # 至少 k 個分錯的機率
         # P(Sn >= k) = 1 - ( P(Sn = 0) + P(Sn = 1)  + ..... + P(Sn = k-1) )
-        error_rate = 0.0
+        error_probability = 0.0
         for i in range(k):
-            print "1: %f" % (math.factorial(total_instance) / (math.factorial(i) * math.factorial(total_instance - i)))
-            print "2: %f" % math.pow(miss_label_rate, i)
-            print "3：%f" % math.pow((1 - miss_label_rate), (total_instance - 1))
-            print "3：%f, %f" % ((1 - miss_label_rate), (total_instance - 1))
-            error_rate += (math.factorial(total_instance) / (math.factorial(i) * math.factorial(total_instance - i))) * math.pow(miss_label_rate, i) * math.pow(1 - miss_label_rate, total_instance - 1)
-            print "accumulate error rate: %f" % error_rate
+            #print "1: %f" % (math.factorial(total_instance) / (math.factorial(i) * math.factorial(total_instance - i)))
+            #print "2: %f" % math.pow(miss_label_rate, i)
+            #print "3：%f" % math.pow((1 - miss_label_rate), (total_instance - i))
+            #print "3：%f, %f" % ((1 - miss_label_rate), (total_instance - i))
+            error_probability += (math.factorial(total_instance) / (math.factorial(i) * math.factorial(total_instance - i))) * math.pow(miss_label_rate, i) * math.pow(1 - miss_label_rate, total_instance - i)
 
-        error_rate = 1 - error_rate
-        print "error rate: %f" % error_rate
+        error_probability = 1 - error_probability
+        print "error probability: %f" % error_probability
 
         # standard deviation => s = math.sqrt(Pi * (1-Pi) / i)
-        standard_deviation = math.sqrt(error_rate * (1 - error_rate) / total_instance)
+        standard_deviation = math.sqrt(error_probability * (1 - error_probability) / total_instance)
 
         print "standard deviation: %f" % standard_deviation
 
 
-        if (error_rate + standard_deviation) <= self.current_min:
-            self.min_error_rate = error_rate
+        if (error_probability + standard_deviation) <= self.current_min:
+            self.min_error_probability = error_probability
             self.min_standard_deviation = standard_deviation
-            self.current_min = error_rate + standard_deviation
+            self.current_min = error_probability + standard_deviation
         print "current min: %f " % self.current_min
-        print "min_error_rate: %f" % self.min_error_rate
+        print "min_error_probability: %f" % self.min_error_probability
         print "min_standard_deviation: %f" % self.min_standard_deviation
 
         # detect the level of concept drift
-        if (error_rate + standard_deviation) >= (self.min_error_rate + 3 * self.min_standard_deviation):
+        if (error_probability + standard_deviation) >= (self.min_error_probability + 3 * self.min_standard_deviation):
+            # if concept drift detected, then reset the state of these three variables
             self.current_min = 1
             self.min_standard_deviation = 1
-            self.min_error_rate = 1
+            self.min_error_probability = 1
             return self.levels[2]
-        elif (error_rate + standard_deviation) >= (self.min_error_rate + 2 * self.min_standard_deviation):
+        elif (error_probability + standard_deviation) >= (self.min_error_probability + 2 * self.min_standard_deviation):
             return self.levels[1]
         else:
             return self.levels[0]
 
 
 
-
+# round the float number absolutely
 def ceiling(x):
     n = int(x)
     return n if n-1 < x <= n else n+1
