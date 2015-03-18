@@ -5,7 +5,8 @@ from sklearn.naive_bayes import GaussianNB
 from pyspark.mllib.classification import NaiveBayes, LabeledPoint
 from pyspark import SparkContext
 
-import numpy as np
+from numpy import array
+
 import arff
 from sklearn.naive_bayes import GaussianNB
 import math
@@ -76,17 +77,19 @@ class DriftDetiection():
 
 
 if __name__ == '__main__':
+
     sc = SparkContext(appName="PythonNaiveBayes")
 
     if len(sys.argv) < 2:
         print >> sys.stderr, "Usage: main.py <split size>"
         exit(-1)
 
+    split_size = int(sys.argv[1])
+
     # load dataset
     # file_path = 'hdfs://ubuntu-iim:9000/concept_drift_data/usenet1.arff'
     # file = sc.textFile(file_path)
     dataset = arff.load(open('/home/maydaycha/spark/usenet1.arff', 'rb'))
-
     print "load arff file"
 
     data = list(d[:-1] for d in dataset['data'])
@@ -98,8 +101,6 @@ if __name__ == '__main__':
 
     dataset_size = len(data)
 
-    split_size = int(sys.argv[1])
-
     split_trainingSet = []
     split_data = []
     split_targets = []
@@ -108,8 +109,6 @@ if __name__ == '__main__':
         from_index = int(i * dataset_size / split_size)
         to_index = int((i+1) * dataset_size / split_size)
         print " %d : %d" % (from_index, to_index)
-        #split_data.append(split[from_index : to_index])
-        #split_target.append(target[from_index : to_index])
 
         split_data.append(data[from_index : to_index])
         split_targets.append(targets[from_index : to_index])
@@ -120,21 +119,14 @@ if __name__ == '__main__':
         split_trainingSet.append([LabeledPoint(t, a) for t, a in zip(ts, ds)])
 
 
-    print "============="
-    print np.array(split_targets).shape
-    print np.array(split_trainingSet).shape
-
-
     print "Gaussain naive_bayes classifier selected..."
-
-    # reverse the list
-    # iris.target = iris.target[::-1]
 
     drift_dection = DriftDetiection()
 
+    # covert list to numpy array
+    split_targets = array(split_targets)
 
     for i, v in enumerate(split_trainingSet):
-        # print "Training model..."
        # if i == 0:
         model = NaiveBayes.train(sc.parallelize(v))
         print '==================== round %d ==============================' % i
@@ -143,14 +135,14 @@ if __name__ == '__main__':
 
         if i == (len(split_trainingSet) - 1):
             y_pred = model.predict(sc.parallelize(split_data[0])).collect()
+            y_pred = array(y_pred)
 
-            print "level: %s" % drift_dection.detect(np.array(y_pred), np.array(split_targets[0]), int(len(split_data[0]) / 2))
-            print "Number of mislabeled points out of a total %d points : %d" % (len(split_data[0]), (np.array(split_targets[0]) != np.array(y_pred)).sum())
+            print "level: %s" % drift_dection.detect(y_pred, split_targets[0], int(len(split_data[0]) / 2))
+            print "Number of mislabeled points out of a total %d points : %d" % (len(split_data[0]), (split_targets[0] != y_pred).sum())
         else:
             y_pred = model.predict(sc.parallelize(split_data[i + 1])).collect()
-            print "level: %s" % drift_dection.detect(np.array(y_pred), np.array(split_targets[i + 1]), int(len(split_data[i + 1]) / 2))
-            print "Number of mislabeled points out of a total %d points : %d" % (len(split_data[i + 1]), (np.array(split_targets[i + 1]) != np.array(y_pred)).sum())
-
+            print "level: %s" % drift_dection.detect(y_pred, split_targets[i + 1], int(len(split_data[i + 1]) / 2))
+            print "Number of mislabeled points out of a total %d points : %d" % (len(split_data[i + 1]), (split_targets[i + 1] != y_pred).sum())
 
 
         # words.map(lambda x: (x, 1)).reduceByKey(lambda x,y:x+y).map(lambda x:(x[1],x[0])).sortByKey(False)
