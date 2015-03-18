@@ -26,6 +26,7 @@ class DriftDetiection():
         print "K: %d" % k
         miss_label_count = (predict_labels != real_labels).sum()
         total_instance = len(predict_labels)
+        print "total instance: %d" % total_instance
         precision_rate = (total_instance - miss_label_count) / total_instance
         miss_label_rate = miss_label_count / total_instance
 
@@ -36,11 +37,12 @@ class DriftDetiection():
         # P(Sn >= k) = 1 - ( P(Sn = 0) + P(Sn = 1)  + ..... + P(Sn = k-1) )
         error_rate = 0.0
         for i in range(k):
-            # print "1: %f" % (math.factorial(total_instance) / (math.factorial(i) * math.factorial(total_instance - i)))
-            # print "2: %f" % math.pow(miss_label_rate, i)
-            # print "3：%f" % math.pow((1 - miss_label_rate), (total_instance - 1))
-            # print "3：%f, %f" % ((1 - miss_label_rate), (total_instance - 1))
-            error_rate += (math.factorial(total_instance) / (math.factorial(i) * math.factorial(total_instance - i))) * math.pow(miss_label_rate, i) * math.pow((1 - miss_label_rate), (total_instance - 1))
+            print "1: %f" % (math.factorial(total_instance) / (math.factorial(i) * math.factorial(total_instance - i)))
+            print "2: %f" % math.pow(miss_label_rate, i)
+            print "3：%f" % math.pow((1 - miss_label_rate), (total_instance - 1))
+            print "3：%f, %f" % ((1 - miss_label_rate), (total_instance - 1))
+            error_rate += (math.factorial(total_instance) / (math.factorial(i) * math.factorial(total_instance - i))) * math.pow(miss_label_rate, i) * math.pow(1 - miss_label_rate, total_instance - 1)
+            print "accumulate error rate: %f" % error_rate
 
         error_rate = 1 - error_rate
         print "error rate: %f" % error_rate
@@ -72,6 +74,10 @@ class DriftDetiection():
 
 
 
+
+def ceiling(x):
+    n = int(x)
+    return n if n-1 < x <= n else n+1
 
 
 
@@ -105,6 +111,8 @@ if __name__ == '__main__':
     split_data = []
     split_targets = []
 
+    concept_change_data = []
+
     for i in range(split_size):
         from_index = int(i * dataset_size / split_size)
         to_index = int((i+1) * dataset_size / split_size)
@@ -137,12 +145,22 @@ if __name__ == '__main__':
             y_pred = model.predict(sc.parallelize(split_data[0])).collect()
             y_pred = array(y_pred)
 
-            print "level: %s" % drift_dection.detect(y_pred, split_targets[0], int(len(split_data[0]) / 2))
             print "Number of mislabeled points out of a total %d points : %d" % (len(split_data[0]), (split_targets[0] != y_pred).sum())
+
+            level = drift_dection.detect(y_pred, split_targets[0], ceiling(len(split_data[0]) / 2))
+
+            print "level: %s" % level
+
         else:
+            print "@@ : %f" % len(split_data[i+1])
             y_pred = model.predict(sc.parallelize(split_data[i + 1])).collect()
-            print "level: %s" % drift_dection.detect(y_pred, split_targets[i + 1], int(len(split_data[i + 1]) / 2))
+            y_pred = array(y_pred)
+
             print "Number of mislabeled points out of a total %d points : %d" % (len(split_data[i + 1]), (split_targets[i + 1] != y_pred).sum())
+
+            level = drift_dection.detect(y_pred, split_targets[i + 1], ceiling(len(split_data[i + 1]) / 2))
+
+            print "level: %s" % level
 
 
         # words.map(lambda x: (x, 1)).reduceByKey(lambda x,y:x+y).map(lambda x:(x[1],x[0])).sortByKey(False)
