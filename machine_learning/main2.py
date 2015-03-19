@@ -1,16 +1,14 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import division
-from sklearn.naive_bayes import GaussianNB
 from pyspark.mllib.classification import NaiveBayes, LabeledPoint
 from pyspark import SparkContext
-
 from numpy import array
 
 import arff
-from sklearn.naive_bayes import GaussianNB
 import math
 import sys
+import csv
 
 levels = ['normal', 'warning', 'drift']
 
@@ -21,6 +19,7 @@ class DriftDetiection():
         self.min_error_probability = 1
         self.current_min = 1
         self.levels = ['normal', 'warning', 'drift']
+        self.saved_instances = []
 
     def detect(self, predict_labels, real_labels, k):
         print "K: %d" % k
@@ -66,11 +65,28 @@ class DriftDetiection():
             self.current_min = 1
             self.min_standard_deviation = 1
             self.min_error_probability = 1
-            return self.levels[2]
+            l = self.levels[2]
         elif (error_probability + standard_deviation) >= (self.min_error_probability + 2 * self.min_standard_deviation):
-            return self.levels[1]
+            l = self.levels[1]
         else:
-            return self.levels[0]
+            l = self.levels[0]
+
+
+        return {"level": l, 'precision_rate': precision_rate, 'miss_label_rate': miss_label_rate, 'error_probability': error_probability, 'standard_deviation': standard_deviation, "min_error_probability": self.min_error_probability, 'self.min_standard_deviation': self.min_standard_deviation, 'self.current_min': self.current_min}
+
+
+
+    def saveInstance(self, labeled_data):
+        self.saved_instances.extend(labeled_data)
+
+
+
+    def getSavedInstance(self):
+        b = self.saved_instances[:]
+        self.saved_instances = []
+        print "clear saved isntances : %d " % len(self.saved_instances)
+        return b
+
 
 
 
@@ -81,16 +97,31 @@ def ceiling(x):
 
 
 
+def saveResultToCSV(filename, records):
+    fieldnames = []
+    for key in records:
+        fieldnames.append(key)
+
+    with open(filename, 'a') as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames = fieldnames)
+
+        writer.writeheader()
+        writer.writerow(records)
+
 
 if __name__ == '__main__':
 
-    sc = SparkContext(appName="PythonNaiveBayes")
+    sc = SparkContext(appName="NaiveBayes")
 
-    if len(sys.argv) < 2:
-        print >> sys.stderr, "Usage: main.py <split size>"
+    fieldnames = ["level", 'precision_rate', 'miss_label_rate', 'error_probability', 'standard_deviation', "min_error_probability", 'self.min_standard_deviation', 'self.current_min']
+
+
+    if len(sys.argv) < 3:
+        print >> sys.stderr, "Usage: main.py <split size> <output filename>"
         exit(-1)
 
     split_size = int(sys.argv[1])
+    filename = sys.argv[2]
 
     # load dataset
     # file_path = 'hdfs://ubuntu-iim:9000/concept_drift_data/usenet1.arff'
@@ -134,33 +165,51 @@ if __name__ == '__main__':
     # covert list to numpy array
     split_targets = array(split_targets)
 
+    csvfile = open(filename + '.csv', 'w')
+    writer = csv.DictWriter(csvfile, fieldnames = fieldnames)
+    writer.writeheader()
+
+    retrain_strategy = False
+
     for i, v in enumerate(split_trainingSet):
-       # if i == 0:
-        model = NaiveBayes.train(sc.parallelize(v))
+
+        if i == 0:
+            model = NaiveBayes.train(sc.parallelize(v))
+        elif retrain_strategy == True:
+            model = NaiveBayes.train(sc.parallelize(drift_dection.getSavedInstance()))
+            retrain_strategy = False
+
         print '==================== round %d ==============================' % i
 
         print 'Predict...'
 
         if i == (len(split_trainingSet) - 1):
-            y_pred = model.predict(sc.parallelize(split_data[0])).collect()
-            y_pred = array(y_pred)
-
-            print "Number of mislabeled points out of a total %d points : %d" % (len(split_data[0]), (split_targets[0] != y_pred).sum())
-
-            level = drift_dection.detect(y_pred, split_targets[0], ceiling(len(split_data[0]) / 2))
-
-            print "level: %s" % level
-
+            predict_data = split_data[0]
+            target_of_predict_data = split_targets[0]
         else:
-            print "@@ : %f" % len(split_data[i+1])
-            y_pred = model.predict(sc.parallelize(split_data[i + 1])).collect()
-            y_pred = array(y_pred)
+            predict_data = split_data[i + 1]
+            target_of_predict_data = split_targets[i + 1]
 
-            print "Number of mislabeled points out of a total %d points : %d" % (len(split_data[i + 1]), (split_targets[i + 1] != y_pred).sum())
+        y_pred = model.predict(sc.parallelize(predict_data)).collect()
+        y_pred = array(y_pred)
 
-            level = drift_dection.detect(y_pred, split_targets[i + 1], ceiling(len(split_data[i + 1]) / 2))
+        print "Number of mislabeled points out of a total %d points : %d" % (len(predict_data), (target_of_predict_data != y_pred).sum())
 
-            print "level: %s" % level
+        detection_result = drift_dection.detect(y_pred, target_of_predict_data, ceiling(len(predict_data) / 2))
+
+        level = detection_result['level']
+
+        print detection_result
+
+        if level == 'warning' or level == 'drift':
+            drift_dection.saveInstance([LabeledPoint(x, y) for x, y in zip(target_of_predict_data, predict_data)])
+            retrain_strategy = True
+
+        print "level: %s" % level
+
+        writer.writerow(detection_result)
 
 
         # words.map(lambda x: (x, 1)).reduceByKey(lambda x,y:x+y).map(lambda x:(x[1],x[0])).sortByKey(False)
+
+    csvfile.close()
