@@ -9,6 +9,7 @@ import arff
 import math
 import sys
 import csv
+import os
 
 levels = ['normal', 'warning', 'drift']
 
@@ -36,11 +37,11 @@ class DriftDetiection():
         # P(Sn >= k) = 1 - ( P(Sn = 0) + P(Sn = 1)  + ..... + P(Sn = k-1) )
         error_probability = 0.0
         for i in range(k):
-            #print "1: %f" % (math.factorial(total_instance) / (math.factorial(i) * math.factorial(total_instance - i)))
-            #print "2: %f" % math.pow(miss_label_rate, i)
-            #print "3：%f" % math.pow((1 - miss_label_rate), (total_instance - i))
-            #print "3：%f, %f" % ((1 - miss_label_rate), (total_instance - i))
-            error_probability += (math.factorial(total_instance) / (math.factorial(i) * math.factorial(total_instance - i))) * math.pow(miss_label_rate, i) * math.pow(1 - miss_label_rate, total_instance - i)
+            print "1: %f" % (math.factorial(total_instance) // (math.factorial(i) * math.factorial(total_instance - i)))
+            print "2: %f" % math.pow(miss_label_rate, i)
+            print "3：%f" % math.pow((1 - miss_label_rate), (total_instance - i))
+            print "3：%f, %f" % ((1 - miss_label_rate), (total_instance - i))
+            error_probability += (math.factorial(total_instance) // (math.factorial(i) * math.factorial(total_instance - i))) * math.pow(miss_label_rate, i) * math.pow(1 - miss_label_rate, total_instance - i)
 
         error_probability = 1 - error_probability
         print "error probability: %f" % error_probability
@@ -97,16 +98,6 @@ def ceiling(x):
 
 
 
-def saveResultToCSV(filename, records):
-    fieldnames = []
-    for key in records:
-        fieldnames.append(key)
-
-    with open(filename, 'a') as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames = fieldnames)
-
-        writer.writeheader()
-        writer.writerow(records)
 
 
 if __name__ == '__main__':
@@ -116,25 +107,36 @@ if __name__ == '__main__':
     fieldnames = ["level", 'precision_rate', 'miss_label_rate', 'error_probability', 'standard_deviation', "min_error_probability", 'self.min_standard_deviation', 'self.current_min']
 
 
-    if len(sys.argv) < 3:
-        print >> sys.stderr, "Usage: main.py <split size> <output filename>"
+    if len(sys.argv) < 4:
+        print >> sys.stderr, "Usage: main.py <split size> <input filepath> <output outputFile>"
         exit(-1)
 
     split_size = int(sys.argv[1])
-    filename = sys.argv[2]
+    inputFile = sys.argv[2]
+    outputFile = sys.argv[3]
 
     # load dataset
     # file_path = 'hdfs://ubuntu-iim:9000/concept_drift_data/usenet1.arff'
     # file = sc.textFile(file_path)
-    dataset = arff.load(open('/home/maydaycha/spark/usenet1.arff', 'rb'))
-    print "load arff file"
+    name, extension = os.path.splitext(inputFile)
+    if extension == '.arff':
+        dataset = arff.load(open(inputFile, 'rb'))
+        dataset = dataset['data']
+    else:
+        with open(inputFile) as f:
+            dataset = f.readlines()
+            dataset = dataset[:5000]
+            dataset = [s[:-1].split(',') for s in dataset]
+            dataset = [map(lambda s : float(s), x) for x in dataset]
 
-    data = list(d[:-1] for d in dataset['data'])
+    data = list(d[:-1] for d in dataset)
+    targets = list((int(c[-1]) for c in dataset))
+
+    print "load input file"
+
 
     # convert string to integer
     data = [map(int, x) for x in data]
-
-    targets = list((int(c[-1]) for c in dataset['data']))
 
     dataset_size = len(data)
 
@@ -165,7 +167,7 @@ if __name__ == '__main__':
     # covert list to numpy array
     split_targets = array(split_targets)
 
-    csvfile = open(filename + '.csv', 'w')
+    csvfile = open(outputFile, 'w')
     writer = csv.DictWriter(csvfile, fieldnames = fieldnames)
     writer.writeheader()
 
