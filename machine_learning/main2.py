@@ -15,13 +15,12 @@ levels = ['normal', 'warning', 'drift']
 
 class DriftDetiectionFramework():
 
-    def __init__(self, sparkContext, inputFile = None, outputFile = None):
+    def __init__(self, sparkContext, outputFile = None):
         self.min_standard_deviation = 1
         self.min_error_probability = 1
         self.current_min = 1
         self.levels = ['normal', 'warning', 'drift']
         self.saved_instances = []
-        self.inputFile = inputFile
         self.outputFile = outputFile
         self.fieldnames = ["level", 'precision_rate', 'miss_label_rate', 'error_probability', 'standard_deviation', "min_error_probability", 'self.min_standard_deviation', 'self.current_min']
         self.sc = sparkContext
@@ -223,7 +222,7 @@ if __name__ == '__main__':
             dataset = [s[:-1].split(',') for s in dataset]
             dataset = [map(lambda s : float(s), x) for x in dataset]
 
-    driftDectionFramework = DriftDetiectionFramework(sc, inputFile, outputFile)
+    driftDectionFramework = DriftDetiectionFramework(sc, outputFile)
 
     driftDectionFramework.predict(dataset, split_size)
 
