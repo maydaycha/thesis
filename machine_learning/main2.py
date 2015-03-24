@@ -24,6 +24,8 @@ class DriftDetiectionFramework():
         self.outputFile = outputFile
         self.fieldnames = ["level", 'precision_rate', 'miss_label_rate', 'error_probability', 'standard_deviation', "min_error_probability", 'self.min_standard_deviation', 'self.current_min']
         self.sc = sparkContext
+        self.csvWriter = None
+        self.model = None
 
     def detect(self, predict_labels, real_labels, k):
         print "K: %d" % k
@@ -40,11 +42,11 @@ class DriftDetiectionFramework():
         # P(Sn >= k) = 1 - ( P(Sn = 0) + P(Sn = 1)  + ..... + P(Sn = k-1) )
         error_probability = 0.0
         for i in range(k):
-            print "1: %f" % (math.factorial(total_instance) // (math.factorial(i) * math.factorial(total_instance - i)))
-            print "2: %f" % math.pow(miss_label_rate, i)
-            print "3：%f" % math.pow((1 - miss_label_rate), (total_instance - i))
-            print "3：%f, %f" % ((1 - miss_label_rate), (total_instance - i))
-            error_probability += (math.factorial(total_instance) // (math.factorial(i) * math.factorial(total_instance - i))) * math.pow(miss_label_rate, i) * math.pow(1 - miss_label_rate, total_instance - i)
+           # print "1: %f" % (math.factorial(total_instance) // (math.factorial(i) * math.factorial(total_instance - i)))
+           # print "2: %f" % math.pow(miss_label_rate, i)
+           # print "3：%f" % math.pow((1 - miss_label_rate), (total_instance - i))
+           # print "3：%f, %f" % ((1 - miss_label_rate), (total_instance - i))
+            error_probability += (math.factorial(total_instance) / (math.factorial(i) * math.factorial(total_instance - i))) * math.pow(miss_label_rate, i) * math.pow(1 - miss_label_rate, total_instance - i)
 
         error_probability = 1 - error_probability
         print "error probability: %f" % error_probability
@@ -55,7 +57,7 @@ class DriftDetiectionFramework():
         print "standard deviation: %f" % standard_deviation
 
 
-        if (error_probability + standard_deviation) <= self.current_min:
+        if (error_probability + standard_deviation) < self.current_min:
             self.min_error_probability = error_probability
             self.min_standard_deviation = standard_deviation
             self.current_min = error_probability + standard_deviation
@@ -119,10 +121,10 @@ class DriftDetiectionFramework():
 
         for i, v in enumerate(split_trainingSet):
 
-            if i == 0:
-                model = NaiveBayes.train(self.sc.parallelize(v))
+            if self.model == None:
+                self.model = NaiveBayes.train(self.sc.parallelize(v))
             elif retrain_strategy == True:
-                model = NaiveBayes.train(self.sc.parallelize(getSavedInstance()))
+                self.model = NaiveBayes.train(self.sc.parallelize(self.getSavedInstance()))
                 retrain_strategy = False
 
             print '==================== round %d ==============================' % i
@@ -136,30 +138,28 @@ class DriftDetiectionFramework():
                 predict_data = split_data[i + 1]
                 target_of_predict_data = split_targets[i + 1]
 
-            y_pred = model.predict(self.sc.parallelize(predict_data)).collect()
+            y_pred = self.model.predict(self.sc.parallelize(predict_data)).collect()
             y_pred = array(y_pred)
 
             print "Number of mislabeled points out of a total %d points : %d" % (len(predict_data), (target_of_predict_data != y_pred).sum())
 
-            detection_result = detect(y_pred, target_of_predict_data, ceiling(len(predict_data) / 2))
+            detection_result = self.detect(y_pred, target_of_predict_data, ceiling(len(predict_data) / 2))
 
             level = detection_result['level']
 
             print detection_result
 
             if level == 'warning' or level == 'drift':
-                saveInstance([LabeledPoint(x, y) for x, y in zip(target_of_predict_data, predict_data)])
+                self.saveInstance([LabeledPoint(x, y) for x, y in zip(target_of_predict_data, predict_data)])
                 retrain_strategy = True
 
             print "level: %s" % level
 
             # writer.writerow(detection_result)
-            saveRecord(detection_result)
+            self.saveRecord(detection_result)
 
 
             # words.map(lambda x: (x, 1)).reduceByKey(lambda x,y:x+y).map(lambda x:(x[1],x[0])).sortByKey(False)
-
-        closeFile()
 
 
 
@@ -184,7 +184,7 @@ class DriftDetiectionFramework():
         else:
             self.csvWriter.writerow(record)
 
-    def closeFile(self)
+    def closeFile(self):
         if self.csvFile != None:
             self.csvFile.close()
 
@@ -218,13 +218,21 @@ if __name__ == '__main__':
     else:
         with open(inputFile) as f:
             dataset = f.readlines()
-            dataset = dataset[:5000]
             dataset = [s[:-1].split(',') for s in dataset]
             dataset = [map(lambda s : float(s), x) for x in dataset]
+    datasetLen = len(dataset)
 
     driftDectionFramework = DriftDetiectionFramework(sc, outputFile)
 
-    driftDectionFramework.predict(dataset, split_size)
+    if datasetLen > 5000:
+        for i in range(int(datasetLen / 5000)):
+            driftDectionFramework.predict(dataset[5000 * i : 5000 * (i + 1)], split_size)
+
+    else:
+        driftDectionFramework.predict(dataset, split_size)
+
+    driftDectionFramework.closeFile()
+
 
 
 
