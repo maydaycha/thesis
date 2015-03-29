@@ -5,11 +5,7 @@ from pyspark.mllib.classification import NaiveBayes, LabeledPoint
 from pyspark import SparkContext
 from numpy import array
 
-import arff
-import math
-import sys
-import csv
-import os
+import arff, math, sys, csv, os
 
 levels = ['normal', 'warning', 'drift']
 
@@ -120,7 +116,6 @@ class DriftDetiectionFramework():
         retrain_strategy = False
 
         for i, v in enumerate(split_trainingSet):
-
             if self.model == None:
                 self.model = NaiveBayes.train(self.sc.parallelize(v))
             elif retrain_strategy == True:
@@ -138,11 +133,15 @@ class DriftDetiectionFramework():
                 predict_data = split_data[i + 1]
                 target_of_predict_data = split_targets[i + 1]
 
+
             y_pred = self.model.predict(self.sc.parallelize(predict_data)).collect()
             y_pred = array(y_pred)
 
+
+
             print "Number of mislabeled points out of a total %d points : %d" % (len(predict_data), (target_of_predict_data != y_pred).sum())
 
+            # Detect concept drift
             detection_result = self.detect(y_pred, target_of_predict_data, ceiling(len(predict_data) / 2))
 
             level = detection_result['level']
