@@ -4,6 +4,7 @@ import numpy as np
 from pyspark.mllib.regression import LabeledPoint
 from pyspark.mllib.classification import NaiveBayes
 
+
 class MyClass(MultinomialNB):
 
     def __init__(self):
@@ -21,18 +22,25 @@ class My(NaiveBayes):
         NaiveBayes.__init__(self)
 
 
+def myFunc(data):
+    import random
+    with open("/home/maydaycha/sea.data") as f:
+        content = f.readlines()
+
+
+    #with open("/home/maydaycha/myresult.txt", 'w') as f:
+     #   for c in content:
+      #      f.write("%s" % c)
+
+    return[content]
+
 if __name__ == '__main__':
     sc = SparkContext(appName="test")
 
-    # an RDD of LabeledPoint
-    data = sc.parallelize([
-        LabeledPoint(0.0, [0.0, 0.0])
-    ])
+    myRDD = sc.parallelize(range(6), 3)
+    r = sc.runJob(myRDD, myFunc)
 
-    # Train a naive Bayes model.
-    model = My.train(data, 1.0)
-
-    # Make prediction.
-    prediction = model.predict([0.0, 0.0])
-
-    print prediction
+    with open('/home/maydaycha/myresult.txt', 'w') as f:
+        for c in r:
+            for x in c:
+                f.write("%s" % x)

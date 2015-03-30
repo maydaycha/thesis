@@ -22,7 +22,7 @@ class DriftDetiectionFramework():
 
     levels = ['normal', 'warning', 'drift']
 
-    def __init__(self, outputFile = None):
+    def __init__(self, outputFile, reTrain):
         self.minStandardDeviation = 10
         self.minErrorProbability = 10
         self.currentMin = 10
@@ -32,6 +32,7 @@ class DriftDetiectionFramework():
         self.csvWriter = None
         self.classifier = None
         self.retrainStrategy = False
+        self.reTrain = reTrain
 
 
 
@@ -142,7 +143,8 @@ class DriftDetiectionFramework():
                 if len(trainset) > 0:
                     fs = [t[:-1] for t in trainset]
                     ls = [t[-1] for t in trainset]
-                    #self.classifier = GaussianNB().fit(array(fs), array(ls))
+                    if self.reTrain:
+                        self.classifier = GaussianNB().fit(array(fs), array(ls))
                 self.retrainStrategy = False
 
             print '==================== round %d ==============================' % i
@@ -172,13 +174,14 @@ class DriftDetiectionFramework():
 
             print detection_result
 
-            if level == 'normal' and lastLevel == 'warning':
-                self.discardSaveInstance()
+            #if level == 'normal' and lastLevel == 'warning':
+             #   self.discardSaveInstance()
 
             if level == 'warning' or level == 'drift':
                 self.saveInstance([x + [y] for x, y in zip(predict_data, target_of_predict_data)])
 
-            if level == 'drift' and lastLevel != 'normal':
+            #if level == 'drift' and lastLevel != 'normal':
+            if level == 'drift':
                 self.retrainStrategy = True
 
             lastLevel = level
@@ -232,14 +235,14 @@ def ceiling(x):
 if __name__ == '__main__':
     sc = SparkContext(appName="NaiveBayes")
 
-
     if len(sys.argv) < 4:
-        print >> sys.stderr, "Usage: main.py <split size> <input filepath> <output outputFile>"
+        print >> sys.stderr, "Usage: main.py <split size> <reTrainStrategy: 0, 1> <input filepath> <output outputFile>"
         exit(-1)
 
     split_size = int(sys.argv[1])
-    inputFile = sys.argv[2]
-    outputFile = sys.argv[3]
+    reTrain = True if int(sys.argv[2]) == 1 else False
+    inputFile = sys.argv[3]
+    outputFile = sys.argv[4]
 
     # load dataset
     # file_path = 'hdfs://ubuntu-iim:9000/concept_drift_data/usenet1.arff'
@@ -254,14 +257,9 @@ if __name__ == '__main__':
             dataset = [s[:-1].split(',') for s in dataset]
             dataset = [map(lambda s : float(s), x) for x in dataset]
 
-    #dataset = [d[:2] + [d[-1]] for d in dataset]
-
-    #dataset = [map(int, d) for d in dataset]
     datasetLen = len(dataset)
 
-    driftDectionFramework = DriftDetiectionFramework(outputFile)
-
-    #driftDectionFramework.prepareClasasifier(dataset[:5000], -1 * int(5000 / 3))
+    driftDectionFramework = DriftDetiectionFramework(outputFile, reTrain)
 
     driftDectionFramework.prepareClasasifier(dataset[:100], -1 * int(len(dataset[:100])))
 
