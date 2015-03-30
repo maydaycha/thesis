@@ -20,7 +20,10 @@ levels = ['normal', 'warning', 'drift']
 
 class DriftDetiectionFramework():
 
-    levels = ['normal', 'warning', 'drift']
+    alpha = 0.01
+    beta = 0.1
+    fieldnames = ["level", 'precision_rate', 'total_instance', 'weight', 'miss_label_rate', 'error_probability', 'standard_deviation', "min_error_probability", 'self.minStandardDeviation', 'self.currentMin']
+
 
     def __init__(self, outputFile, reTrain):
         self.minStandardDeviation = 10
@@ -28,21 +31,23 @@ class DriftDetiectionFramework():
         self.currentMin = 10
         self.savedInstances = []
         self.outputFile = outputFile
-        self.fieldnames = ["level", 'precision_rate', 'total_instance', 'miss_label_rate', 'error_probability', 'standard_deviation', "min_error_probability", 'self.minStandardDeviation', 'self.currentMin']
         self.csvWriter = None
         self.classifier = None
         self.retrainStrategy = False
         self.reTrain = reTrain
+        self.weight = 1
 
 
 
     def detect(self, predict_labels, real_labels, k):
         print "K: %d" % k
         miss_label_count = (predict_labels != real_labels).sum()
+        correct_label_count = (predict_labels == real_labels).sum()
         total_instance = len(predict_labels)
         print "total instance: %d" % total_instance
-        precision_rate = (total_instance - miss_label_count) / total_instance
+        precision_rate = (correct_label_count) / total_instance
         miss_label_rate = miss_label_count / total_instance
+        self.weight = self.weight - miss_label_count * DriftDetiectionFramework.beta + correct_label_count * DriftDetiectionFramework.alpha
 
         print "miss label: %f" % miss_label_rate
 
@@ -90,7 +95,7 @@ class DriftDetiectionFramework():
             l = levels[0]
 
 
-        return {"level": l, 'precision_rate': precision_rate, 'total_instance': total_instance, 'miss_label_rate': miss_label_rate, 'error_probability': error_probability, 'standard_deviation': standard_deviation, "min_error_probability": self.minErrorProbability, 'self.minStandardDeviation': self.minStandardDeviation, 'self.currentMin': self.currentMin}
+        return {"level": l, 'precision_rate': precision_rate, 'total_instance': total_instance, 'weight': self.weight, 'miss_label_rate': miss_label_rate, 'error_probability': error_probability, 'standard_deviation': standard_deviation, "min_error_probability": self.minErrorProbability, 'self.minStandardDeviation': self.minStandardDeviation, 'self.currentMin': self.currentMin}
 
 
     def prepareClasasifier(self, trainingSet, partition = 0):
@@ -145,6 +150,8 @@ class DriftDetiectionFramework():
                     ls = [t[-1] for t in trainset]
                     if self.reTrain:
                         self.classifier = GaussianNB().fit(array(fs), array(ls))
+                        # reset the weight
+                        self.weight = 1
                 self.retrainStrategy = False
 
             print '==================== round %d ==============================' % i
@@ -167,8 +174,7 @@ class DriftDetiectionFramework():
             print "Number of mislabeled points out of a total %d points : %d" % (len(predict_data), (target_of_predict_data != y_pred).sum())
 
             # Detect concept drift
-            detection_result = self.detect(y_pred, target_of_predict_data, ceiling(len(predict_data) / 3))
-           # detection_result = self.detect(y_pred, target_of_predict_data, 30)
+            detection_result = self.detect(y_pred, target_of_predict_data, ceiling(len(predict_data) / 2))
 
             level = detection_result['level']
 
@@ -180,8 +186,8 @@ class DriftDetiectionFramework():
             if level == 'warning' or level == 'drift':
                 self.saveInstance([x + [y] for x, y in zip(predict_data, target_of_predict_data)])
 
-            #if level == 'drift' and lastLevel != 'normal':
-            if level == 'drift':
+            if level == 'drift' and lastLevel != 'normal':
+            #if level == 'drift':
                 self.retrainStrategy = True
 
             lastLevel = level
@@ -211,8 +217,9 @@ class DriftDetiectionFramework():
     def saveRecord(self, record):
         if self.csvWriter == None:
             self.csvFile = open(self.outputFile, 'w')
-            self.csvWriter = csv.DictWriter(self.csvFile, fieldnames = self.fieldnames)
+            self.csvWriter = csv.DictWriter(self.csvFile, fieldnames = DriftDetiectionFramework.fieldnames)
             self.csvWriter.writeheader()
+            self.csvWriter.writerow(record)
         else:
             self.csvWriter.writerow(record)
         return self
