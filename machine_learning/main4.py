@@ -36,6 +36,7 @@ class DriftDetiectionFramework():
         self.retrainStrategy = False
         self.reTrain = reTrain
         self.weight = 1
+        self.total = 0
 
 
 
@@ -94,8 +95,10 @@ class DriftDetiectionFramework():
         else:
             l = levels[0]
 
+        self.total += total_instance
 
-        return {"level": l, 'precision_rate': precision_rate, 'total_instance': total_instance, 'weight': self.weight, 'miss_label_rate': miss_label_rate, 'error_probability': error_probability, 'standard_deviation': standard_deviation, "min_error_probability": self.minErrorProbability, 'self.minStandardDeviation': self.minStandardDeviation, 'self.currentMin': self.currentMin}
+
+        return {"level": l, 'precision_rate': precision_rate, 'total_instance': self.total, 'weight': self.weight, 'miss_label_rate': miss_label_rate, 'error_probability': error_probability, 'standard_deviation': standard_deviation, "min_error_probability": self.minErrorProbability, 'self.minStandardDeviation': self.minStandardDeviation, 'self.currentMin': self.currentMin}
 
 
     def prepareClasasifier(self, trainingSet, partition = 0):
@@ -186,8 +189,8 @@ class DriftDetiectionFramework():
             if level == 'warning' or level == 'drift':
                 self.saveInstance([x + [y] for x, y in zip(predict_data, target_of_predict_data)])
 
-            if level == 'drift' and lastLevel != 'normal':
-            #if level == 'drift':
+            #if level == 'drift' and lastLevel != 'normal':
+            if level == 'drift':
                 self.retrainStrategy = True
 
             lastLevel = level
@@ -268,7 +271,8 @@ if __name__ == '__main__':
 
     driftDectionFramework = DriftDetiectionFramework(outputFile, reTrain)
 
-    driftDectionFramework.prepareClasasifier(dataset[:100], -1 * int(len(dataset[:100])))
+    #driftDectionFramework.prepareClasasifier(dataset[:100], -1 * int(len(dataset[:100])))
+    driftDectionFramework.prepareClasasifier(dataset[:5000], -1 * int(len(dataset[:5000])))
 
     partitionSize = 5000
     if datasetLen > partitionSize:
