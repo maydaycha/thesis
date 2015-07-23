@@ -37,11 +37,12 @@ class DriftDetiectionFramework():
         self.reTrain = reTrain
         self.weight = 1
         self.total = 0
+        self.confuseMatrix = {}
 
 
 
     def detect(self, predict_labels, real_labels, k):
-        print "K: %d" % k
+        print "k: %d" % k
         miss_label_count = (predict_labels != real_labels).sum()
         correct_label_count = (predict_labels == real_labels).sum()
         total_instance = len(predict_labels)
@@ -51,6 +52,21 @@ class DriftDetiectionFramework():
         self.weight = self.weight - miss_label_count * DriftDetiectionFramework.beta + correct_label_count * DriftDetiectionFramework.alpha
 
         print "miss label: %f" % miss_label_rate
+
+        print predict_labels
+        print real_labels
+
+        # Confuse matrix
+
+
+        for p, r in zip(predict_labels, real_labels):
+            key = str(p) + ',' + str(r)
+            if key not in self.confuseMatrix:
+                self.confuseMatrix[key] = 1
+            else:
+                self.confuseMatrix[key] += 1
+
+
 
         # Binomial Distribution
         # 至少 k 個分錯的機率
@@ -84,7 +100,7 @@ class DriftDetiectionFramework():
         print "min_standard_deviation: %f" % self.minStandardDeviation
 
         # Detect the level of concept drift
-        if (error_probability + standard_deviation) > (self.minErrorProbability + 3 * self.minStandardDeviation):
+        if (error_probability + standard_deviation) > (self.minErrorProbability + 3 * self.minStandardDeviation) or error_probability == 1:
             # If concept drift detected, then reset the state of these three variables
             self.currentMin = 10
             self.minStandardDeviation = 10
@@ -150,7 +166,7 @@ class DriftDetiectionFramework():
                 trainset = self.getSavedInstance()
                 if len(trainset) > 0:
                     fs = [t[:-1] for t in trainset]
-                    ls = [t[-1] for t in trainset]
+                    ls = [float(t[-1]) for t in trainset]
                     if self.reTrain:
                         self.classifier = GaussianNB().fit(array(fs), array(ls))
                         # reset the weight
@@ -169,7 +185,7 @@ class DriftDetiectionFramework():
                 target_of_predict_data = split_targets[i + 1]
 
             predict_data = split_data[i]
-            target_of_predict_data = split_targets[i]
+            target_of_predict_data = array(split_targets[i])
 
 
             y_pred = self.classifier.predict(array(predict_data))
@@ -184,7 +200,7 @@ class DriftDetiectionFramework():
             print detection_result
 
             #if level == 'normal' and lastLevel == 'warning':
-             #   self.discardSaveInstance()
+            #    self.discardSaveInstance()
 
             if level == 'warning' or level == 'drift':
                 self.saveInstance([x + [y] for x, y in zip(predict_data, target_of_predict_data)])
@@ -242,6 +258,7 @@ def ceiling(x):
     return n if n-1 < x <= n else n+1
 
 
+
 if __name__ == '__main__':
     sc = SparkContext(appName="NaiveBayes")
 
@@ -271,8 +288,8 @@ if __name__ == '__main__':
 
     driftDectionFramework = DriftDetiectionFramework(outputFile, reTrain)
 
-    #driftDectionFramework.prepareClasasifier(dataset[:100], -1 * int(len(dataset[:100])))
-    driftDectionFramework.prepareClasasifier(dataset[:5000], -1 * int(len(dataset[:5000])))
+    driftDectionFramework.prepareClasasifier(dataset[:100], -1 * int(len(dataset[:100])))
+    #driftDectionFramework.prepareClasasifier(dataset[:5000], -1 * int(len(dataset[:5000])))
 
     partitionSize = 5000
     if datasetLen > partitionSize:
@@ -281,6 +298,10 @@ if __name__ == '__main__':
 
     else:
         driftDectionFramework.predict(dataset, split_size)
+
+
+    with open('output/confuseMatrix.txt', 'w') as f:
+        f.write(str(driftDectionFramework.confuseMatrix))
 
     driftDectionFramework.closeFile()
 
